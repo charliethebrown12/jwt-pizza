@@ -7,13 +7,13 @@ As part of `Deliverable ⓵ Development deployment: JWT Pizza`, start up the app
 | User activity                                       | Frontend component | Backend endpoints | Database SQL |
 | --------------------------------------------------- | ------------------ | ----------------- | ------------ |
 | View home page                                      |                    |                   |              |
-| Register new user<br/>(t@jwt.com, pw: test)         |                    |                   |              |
-| Login new user<br/>(t@jwt.com, pw: test)            |                    |                   |              |
-| Order pizza                                         |                    |                   |              |
+| Register new user<br/>(t@jwt.com, pw: test)         |                    |[POST] /api/auth   |  INSERT INTO user (name, email, password) VALUES (?, ?, ?)<br/>INSERT INTO userRole (userId, role, objectId) VALUES (?, ?, ?)          |
+| Login new user<br/>(t@jwt.com, pw: test)            |                    |[PUT] /api/auth    |SELECT * FROM user WHERE email=?<br/>INSERT INTO auth (token, userId) VALUES (?, ?) ON DUPLICATE KEY UPDATE token=token |
+| Order pizza                                         |                    |                   |SELECT userId FROM auth WHERE token=?<br/>INSERT INTO orderItem (orderId, menuId, description, price) VALUES (?, ?, ?, ?)`, [orderId, menuId, item.description, item.price]<br/>SELECT id FROM ${table} WHERE ${key}=?`, [value]             |
 | Verify pizza                                        |                    |                   |              |
 | View profile page                                   |                    |                   |              |
 | View franchise<br/>(as diner)                       |                    |                   |              |
-| Logout                                              |                    |                   |              |
+| Logout                                              |                    |[DELETE] /api/auth | SELECT userId FROM auth WHERE token=?<br/>DELETE FROM auth WHERE token=?            |
 | View About page                                     |                    |                   |              |
 | View History page                                   |                    |                   |              |
 | Login as franchisee<br/>(f@jwt.com, pw: franchisee) |                    |                   |              |
