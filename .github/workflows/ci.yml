@@ -42,9 +42,23 @@ jobs:
           npm run test:coverage
       - name: Update coverage
         run: |
+          set -euo pipefail
+          # Read the lines coverage percentage from the summary JSON
           coverage=$(jq '.total.lines.pct' coverage/coverage-summary.json)
+          coverage=$(printf "%.2f" "$coverage")
+          # decide color (red if below 80)
           color=$(echo "$coverage < 80" | bc | awk '{if ($1) print "red"; else print "green"}')
-          curl -s -X POST "https://pizza-factory.cs329.click/api/badge/${{ secrets.NET_ID }}/jwtpizzacoverage?label=Coverage&value=$coverage%25&color=$color" -H "authorization: bearer ${{ secrets.FACTORY_API_KEY }}"
+          echo "Posting coverage: $coverage% (color: $color)"
+
+          # POST the raw coverage JSON as a form file and include metadata as query params
+          # Use verbose output and --fail so the job fails on HTTP errors and the logs show the server response
+          curl -S --fail -v -X POST \
+            -H "Authorization: Bearer ${{ secrets.FACTORY_API_KEY }}" \
+            -F "coverage=@coverage/coverage-summary.json;type=application/json" \
+            "https://pizza-factory.cs329.click/api/badge/${{ secrets.NET_ID }}/jwtpizzacoverage?label=Coverage&value=${coverage}%25&color=${color}" \
+            -o /tmp/coverage-post.response || (echo "Coverage POST failed; see curl output above" && false)
+
+          echo "Badge update response:" && cat /tmp/coverage-post.response || true
   deploy:
     needs: build
     permissions:
