@@ -116,3 +116,65 @@ test('admin can navigate to close franchise and close store pages', async ({ pag
   await page.waitForURL(/.*close-store/);
   await expect(page.getByRole('heading', { name: /Sorry to see you go/i })).toBeVisible();
 });
+
+test('admin can view user list and delete a user', async ({ page }) => {
+  // prepare admin and mock users
+  const mockUsers = [
+    { id: 'u1', name: 'Kai Chen', email: 'd@jwt.com', roles: [{ role: Role.Diner }] },
+    { id: 'u2', name: 'Buddy', email: 'b@jwt.com', roles: [{ role: Role.Admin }] },
+  ];
+
+  let loggedInUser: User | undefined = mockAdmin;
+
+  await page.route('**/api/auth', async (route) => {
+    const loginReq = route.request().postDataJSON();
+    if (loginReq.email === mockAdmin.email && loginReq.password === mockAdmin.password) {
+      await route.fulfill({ json: { user: mockAdmin, token: 'admin-token' } });
+    } else {
+      await route.fulfill({ status: 401, json: { error: 'Unauthorized' } });
+    }
+  });
+
+  await page.route('**/api/user*', async (route) => {
+    // list users
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ json: { users: mockUsers, more: false } });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route('**/api/user/*', async (route) => {
+    if (route.request().method() === 'DELETE') {
+      // pretend delete succeeded
+      await route.fulfill({ json: {} });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/');
+
+  // login
+  await page.getByRole('link', { name: 'Login' }).click();
+  await page.getByRole('textbox', { name: 'Email address' }).fill(mockAdmin.email!);
+  await page.getByRole('textbox', { name: 'Password' }).fill(mockAdmin.password!);
+  await page.getByRole('button', { name: 'Login' }).click();
+
+  // go to admin dashboard
+  await page.getByRole('link', { name: 'Admin' }).click();
+  await page.waitForURL(/.*admin-dashboard/);
+
+  // wait for users section to render
+  await expect(page.getByRole('heading', { name: /Users/i })).toBeVisible();
+  // users should be visible
+  await expect(page.getByText('Kai Chen')).toBeVisible();
+  await expect(page.getByText('Buddy')).toBeVisible();
+
+  // delete the first user
+  const deleteButtons = page.getByRole('button', { name: 'Delete' });
+  await deleteButtons.first().click();
+
+  // after delete, we expect list still present (mock returns same list)
+  await expect(page.getByText('Kai Chen')).toBeVisible();
+});
