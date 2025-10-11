@@ -43,7 +43,6 @@ async function adminInit(page: Page) {
     await route.fulfill({ json: { user: loggedInUser, token: 'admin-token' } });
   });
 
-  // Mock the endpoint that the Admin Dashboard calls to get the list of franchises
   await page.route(/\/api\/franchise(\?.*)?$/, async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({ json: { franchises: mockAllFranchises } });
@@ -54,32 +53,66 @@ async function adminInit(page: Page) {
 }
 
 test('admin can view the list of all franchises', async ({ page }) => {
-  // --- ARRANGE & ACT #1: Log the user in ---
   await adminInit(page);
   await page.getByRole('link', { name: 'Login' }).click();
   await page.getByRole('textbox', { name: 'Email address' }).fill(mockAdmin.email!);
   await page.getByRole('textbox', { name: 'Password' }).fill(mockAdmin.password!);
   await page.getByRole('button', { name: 'Login' }).click();
 
-  // --- ASSERT #1: Verify login was successful ---
   await expect(page.getByRole('link', { name: 'AM' })).toBeVisible();
 
-  // --- ACT #2: Navigate to the admin dashboard ---
-  await page.goto('/admin-dashboard'); // Assuming this is the correct URL
+  await page.getByRole('link', { name: 'Admin' }).click();
+  await page.waitForURL(/.*admin-dashboard/);
 
-  // --- ASSERT #2: Verify the dashboard content ---
-  // Check for a heading and the table
-  await expect(page.getByRole('heading', { name: /Franchise Management/i })).toBeVisible();
-  const table = page.getByRole('table');
-  await expect(table).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Franchises/i })).toBeVisible();
 
-  // Verify the data for the first franchise is in the table
-  const row1 = page.getByRole('row', { name: /Frankie's Pizza Palace/i });
-  await expect(row1).toBeVisible();
-  await expect(row1).toContainText('2 stores'); // Example assertion
+  await expect(page.getByText("Frankie's Pizza Palace")).toBeVisible();
+  await expect(page.getByText('Pizza Pocket')).toBeVisible();
 
-  // Verify the data for the second franchise is in the table
-  const row2 = page.getByRole('row', { name: /Pizza Pocket/i });
-  await expect(row2).toBeVisible();
-  await expect(row2).toContainText('1 stores'); // Example assertion
+  await expect(page.getByText('Downtown')).toBeVisible();
+  await expect(page.getByText('Uptown')).toBeVisible();
+  await expect(page.getByText('Lehi')).toBeVisible();
+});
+
+test('admin can navigate to create franchise page', async ({ page }) => {
+  await adminInit(page);
+  // login
+  await page.getByRole('link', { name: 'Login' }).click();
+  await page.getByRole('textbox', { name: 'Email address' }).fill(mockAdmin.email!);
+  await page.getByRole('textbox', { name: 'Password' }).fill(mockAdmin.password!);
+  await page.getByRole('button', { name: 'Login' }).click();
+
+  // go to admin dashboard and click Add Franchise
+  await page.getByRole('link', { name: 'Admin' }).click();
+  await page.waitForURL(/.*admin-dashboard/);
+  await page.getByRole('button', { name: 'Add Franchise' }).click();
+  await page.waitForURL(/.*create-franchise/);
+
+  // Confirm the create franchise form exists
+  await expect(page.getByPlaceholder('franchise name')).toBeVisible();
+  await expect(page.getByPlaceholder('franchisee admin email')).toBeVisible();
+});
+
+test('admin can navigate to close franchise and close store pages', async ({ page }) => {
+  await adminInit(page);
+  // login
+  await page.getByRole('link', { name: 'Login' }).click();
+  await page.getByRole('textbox', { name: 'Email address' }).fill(mockAdmin.email!);
+  await page.getByRole('textbox', { name: 'Password' }).fill(mockAdmin.password!);
+  await page.getByRole('button', { name: 'Login' }).click();
+
+  // go to admin dashboard
+  await page.getByRole('link', { name: 'Admin' }).click();
+  await page.waitForURL(/.*admin-dashboard/);
+
+  const closeButtons = page.getByRole('button', { name: 'Close' });
+  await closeButtons.first().click();
+  await page.waitForURL(/.*close-franchise/);
+  await expect(page.getByRole('heading', { name: /Sorry to see you go/i })).toBeVisible();
+
+  await page.goBack();
+  await page.waitForURL(/.*admin-dashboard/);
+  await closeButtons.nth(1).click();
+  await page.waitForURL(/.*close-store/);
+  await expect(page.getByRole('heading', { name: /Sorry to see you go/i })).toBeVisible();
 });

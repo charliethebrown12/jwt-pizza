@@ -39,14 +39,12 @@ async function franchiseeInit(page: Page) {
     await route.fulfill({ json: { user: loggedInUser, token: 'franchisee-token' } });
   });
 
-  // Return the currently logged in user
   await page.route('**/api/user/me', async (route) => {
     await route.fulfill({ json: loggedInUser });
   });
 
-  await page.route(/\/api\/franchise(\?.*)?$/, async (route) => {
+  await page.route(/\/api\/franchise(\/.*|\?.*)?$/, async (route) => {
     if (route.request().method() === 'GET') {
-      // The dashboard expects an array of franchises for the logged-in user.
       await route.fulfill({ json: mockFranchiseData });
     }
   });
@@ -55,40 +53,97 @@ async function franchiseeInit(page: Page) {
 }
 
 test('franchisee can view their dashboard with store data', async ({ page }) => {
-  // --- ARRANGE & ACT #1: Log the user in ---
   await franchiseeInit(page);
   await page.getByRole('link', { name: 'Login' }).click();
   await page.getByRole('textbox', { name: 'Email address' }).fill(mockFranchisee.email!);
   await page.getByRole('textbox', { name: 'Password' }).fill(mockFranchisee.password!);
   await page.getByRole('button', { name: 'Login' }).click();
 
-  // --- ASSERT #1: Verify login was successful (e.g., by checking for user initials) ---
   await expect(page.getByRole('link', { name: 'FO' })).toBeVisible();
 
-  // --- ACT #2: Navigate to the franchisee dashboard ---
-  await page.goto('/franchise-dashboard');
+  const globalNav = page.getByLabel('Global');
+  await Promise.all([
+    page.waitForResponse((resp) => resp.url().includes('/api/franchise') && resp.request().method() === 'GET'),
+  globalNav.getByRole('link', { name: 'Franchise' }).first().click(),
+  ]);
+  await page.waitForURL(/.*franchise-dashboard/);
 
-  // --- ASSERT #2: Verify the dashboard content ---
-  // Check that the correct franchise name is the page title
-  await expect(page.getByRole('heading', { name: "Frankie's Pizza Palace" })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Frankie's Pizza Palace/i })).toBeVisible();
 
-  // Ensure the "no franchise" message is NOT visible
   await expect(page.getByText('So you want a piece of the pie?')).not.toBeVisible();
 
-  // Find the table and check its contents
-  const table = page.getByRole('table');
-  await expect(table).toBeVisible();
+  await expect(page.getByText("Frankie's Pizza Palace")).toBeVisible();
+  await expect(page.getByText('Downtown')).toBeVisible();
+  await expect(page.getByText('Uptown')).toBeVisible();
 
-  // Check the first store's data
-  const row1 = page.getByRole('row', { name: /Downtown/i });
-  await expect(row1).toBeVisible();
-  await expect(row1).toContainText('55,000 ₿');
+  await expect(page.getByText('55,000 ₿')).toBeVisible();
+  await expect(page.getByText('82,000 ₿')).toBeVisible();
 
-  // Check the second store's data
-  const row2 = page.getByRole('row', { name: /Uptown/i });
-  await expect(row2).toBeVisible();
-  await expect(row2).toContainText('82,000 ₿');
-
-  // Check for the "Create store" button
   await expect(page.getByRole('button', { name: 'Create store' })).toBeVisible();
+});
+
+test('franchisee sees the marketing page when no franchise exists', async ({ page }) => {
+  // Setup with no franchises returned
+  await franchiseeInit(page);
+  await page.route(/\/api\/franchise(\/.*|\?.*)?$/, async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ json: [] });
+    }
+  });
+
+  // login and navigate
+  await page.getByRole('link', { name: 'Login' }).click();
+  await page.getByRole('textbox', { name: 'Email address' }).fill(mockFranchisee.email!);
+  await page.getByRole('textbox', { name: 'Password' }).fill(mockFranchisee.password!);
+  await page.getByRole('button', { name: 'Login' }).click();
+
+  const globalNav = page.getByLabel('Global');
+  await Promise.all([
+    page.waitForResponse((resp) => resp.url().includes('/api/franchise') && resp.request().method() === 'GET'),
+    globalNav.getByRole('link', { name: 'Franchise' }).first().click(),
+  ]);
+
+  await expect(page.getByRole('heading', { name: 'So you want a piece of the pie?' })).toBeVisible();
+  await expect(page.getByText('Call now')).toBeVisible();
+});
+
+test('franchisee can open create store form', async ({ page }) => {
+  await franchiseeInit(page);
+  // login
+  await page.getByRole('link', { name: 'Login' }).click();
+  await page.getByRole('textbox', { name: 'Email address' }).fill(mockFranchisee.email!);
+  await page.getByRole('textbox', { name: 'Password' }).fill(mockFranchisee.password!);
+  await page.getByRole('button', { name: 'Login' }).click();
+
+  // Navigate to franchise dashboard
+  const globalNav = page.getByLabel('Global');
+  await Promise.all([
+    page.waitForResponse((resp) => resp.url().includes('/api/franchise') && resp.request().method() === 'GET'),
+    globalNav.getByRole('link', { name: 'Franchise' }).first().click(),
+  ]);
+
+  // Click Create store
+  await page.getByRole('button', { name: 'Create store' }).click();
+  await page.waitForURL(/.*create-store/);
+  await expect(page.getByPlaceholder('store name')).toBeVisible();
+});
+
+test('franchisee can navigate to close store page from dashboard', async ({ page }) => {
+  await franchiseeInit(page);
+  // login
+  await page.getByRole('link', { name: 'Login' }).click();
+  await page.getByRole('textbox', { name: 'Email address' }).fill(mockFranchisee.email!);
+  await page.getByRole('textbox', { name: 'Password' }).fill(mockFranchisee.password!);
+  await page.getByRole('button', { name: 'Login' }).click();
+
+  const globalNav = page.getByLabel('Global');
+  await Promise.all([
+    page.waitForResponse((resp) => resp.url().includes('/api/franchise') && resp.request().method() === 'GET'),
+    globalNav.getByRole('link', { name: 'Franchise' }).first().click(),
+  ]);
+
+  const closeStoreButtons = page.getByRole('button', { name: 'Close' });
+  await closeStoreButtons.nth(1).click();
+  await page.waitForURL(/.*close-store/);
+  await expect(page.getByRole('heading', { name: /Sorry to see you go/i })).toBeVisible();
 });

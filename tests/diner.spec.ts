@@ -104,6 +104,19 @@ test('login', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'KC' })).toBeVisible();
 });
 
+test('docs page shows API endpoints', async ({ page }) => {
+  await page.route('**/api/docs', async (route) => {
+    const docs = { endpoints: [{ requiresAuth: false, method: 'GET', path: '/api/health', description: 'Health check', example: 'GET /api/health', response: { ok: true } }] };
+    await route.fulfill({ json: docs });
+  });
+
+  await page.goto('/docs/service');
+  await page.waitForResponse((resp) => resp.url().includes('/api/docs') && resp.status() === 200);
+  await expect(page.getByRole('heading', { name: /JWT Pizza API/i })).toBeVisible();
+  await expect(page.getByText('GET /api/health')).toBeVisible();
+  await expect(page.getByText('Health check')).toBeVisible();
+});
+
 test('purchase with login', async ({ page }) => {
   await basicInit(page);
 
@@ -132,7 +145,6 @@ test('purchase with login', async ({ page }) => {
   await expect(page.locator('tfoot')).toContainText('0.008 ₿');
   await page.getByRole('button', { name: 'Pay now' }).click();
 
-  // Check balance
   await expect(page.getByText('0.008')).toBeVisible();
 });
 
@@ -145,7 +157,6 @@ test('diner dashboard without orders', async ({ page }) => {
 
   await expect(page.getByRole('link', { name: 'KC' })).toBeVisible();
 
-  // 2. Mock the API to return an empty order history
   await page.route('*/**/api/order', async (route) => {
     await route.fulfill({ json: { orders: [] } });
   });
@@ -153,11 +164,9 @@ test('diner dashboard without orders', async ({ page }) => {
   await expect(page.getByText(mockDiner.name!)).toBeVisible();
   await expect(page.getByText(mockDiner.email!)).toBeVisible();
 
-  // Check for the "no orders" message and link
   await expect(page.getByText('How have you lived this long without having a pizza?')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Buy one' })).toHaveAttribute('href', '/menu');
 
-  // Ensure the order table is NOT there
   await expect(page.getByRole('table')).not.toBeVisible();
 });
 
@@ -189,7 +198,6 @@ const mockOrders: Order[] = [
 
   await expect(page.getByRole('link', { name: 'KC' })).toBeVisible();
 
-  // 2. Mock the API to return an empty order history
   await page.route('*/**/api/order', async (route) => {
     await route.fulfill({ json: { orders: mockOrders } });
   });
@@ -197,20 +205,46 @@ const mockOrders: Order[] = [
   await page.goto('/diner-dashboard');
   await expect(page.getByText('How have you lived this long without having a pizza?')).not.toBeVisible();
 
-  // Check that the table and its header are visible
   const table = page.getByRole('table');
   await expect(table).toBeVisible();
   await expect(table.getByRole('row', { name: 'ID Price Date' })).toBeVisible();
 
-  // Verify the content of the first order
-  const row1 = page.getByRole('row', { name: /101/ }); // Find row by order ID
+  const row1 = page.getByRole('row', { name: /101/ }); 
   await expect(row1).toContainText('101');
-  await expect(row1).toContainText('0.008 ₿'); // 0.0038 + 0.0042 = 0.008
+  await expect(row1).toContainText('0.008 ₿');
   await expect(row1).toContainText(mockOrders[0].date.toLocaleString());
 
-  // Verify the content of the second order
   const row2 = page.getByRole('row', { name: /102/ });
   await expect(row2).toContainText('102');
   await expect(row2).toContainText('0.001 ₿');
   await expect(row2).toContainText(mockOrders[1].date.toLocaleString());
+});
+
+test('about and history and static pages render', async ({ page }) => {
+  await page.goto('/about');
+  await expect(page.getByRole('heading', { name: /Our employees/i })).toBeVisible();
+
+  await page.goto('/history');
+  await expect(page.getByRole('heading', { name: /Mama Rucci, my my/i })).toBeVisible();
+
+  await page.goto('/some-random-page-that-does-not-exist');
+  await expect(page.getByText(/dropped a pizza on the floor/i)).toBeVisible();
+});
+
+test('register and logout pages', async ({ page }) => {
+  await page.goto('/register');
+  await expect(page.getByPlaceholder('Full name')).toBeVisible();
+  await expect(page.getByPlaceholder('Email address')).toBeVisible();
+  await expect(page.getByPlaceholder('Password')).toBeVisible();
+
+  await page.route('**/api/auth', async (route) => {
+    if (route.request().method() === 'DELETE') {
+      await route.fulfill({ status: 200, json: {} });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.goto('/logout');
+  await page.waitForURL('/');
+  await expect(page.getByRole('button', { name: 'Order now' })).toBeVisible();
 });
