@@ -11,6 +11,16 @@ type Opts = {
 };
 
 export async function applyDefaultMocks(page: Page, opts: Opts = {}) {
+  // Clear any persisted tokens or orders to avoid cross-test state leakage
+  await page.evaluate(() => {
+    try {
+      localStorage.removeItem('token');
+      sessionStorage.removeItem('jwtp-order');
+      // Also clear any other session/local state left by previous tests
+      // (safe to call in tests)
+      // localStorage.clear(); sessionStorage.clear(); // commented to avoid removing unrelated keys
+    } catch (e) {}
+  });
   const users = opts.users || [];
   const validUsers: Record<string, User> = {};
   users.forEach((u) => (validUsers[u.email || ''] = { ...u }));
@@ -65,7 +75,20 @@ export async function applyDefaultMocks(page: Page, opts: Opts = {}) {
   await page.route(/\/api\/user\/[^/]+$/, async (route) => {
     if (route.request().method() === 'PUT') {
       const updated = route.request().postDataJSON();
-      loggedInUser = { ...updated };
+      // Merge updated fields with existing user to avoid wiping fields like password when not provided
+      const existing = loggedInUser || Object.values(validUsers).find((u: any) => u.id === updated.id) || {};
+      const merged = { ...existing, ...updated };
+      // If password omitted in update (undefined/null/empty), preserve existing password
+      if ((!merged.password || merged.password === '') && existing.password) {
+        merged.password = existing.password;
+      }
+      loggedInUser = { ...merged };
+      // keep the validUsers map in sync so future logins return the updated user
+      try {
+        if (loggedInUser && loggedInUser.email) {
+          validUsers[loggedInUser.email || ''] = { ...loggedInUser };
+        }
+      } catch (e) {}
       const token = `tok-${Math.random().toString(36).slice(2, 8)}`;
       await route.fulfill({ json: { user: loggedInUser, token } });
       return;
@@ -117,11 +140,11 @@ export async function applyDefaultMocks(page: Page, opts: Opts = {}) {
         // If request includes an id (path longer than /api/franchise), return array form for single franchise
         const hasId = /\/api\/franchise\/[^\/?]+/.test(url);
         if (hasId && Array.isArray(payload.franchises)) {
-          // find by id
-          const idMatch = url.match(/\/api\/franchise\/([^\/?]+)/);
+          // find by id; the service expects an array of franchises, so return [found] or []
+          const idMatch = url.match(/\/api\/franchise\/([^\/\?]+)/);
           const id = idMatch && idMatch[1];
           const found = payload.franchises.find((f: any) => f.id === id);
-          await route.fulfill({ json: found || {} });
+          await route.fulfill({ json: found ? [found] : [] });
           return;
         }
         await route.fulfill({ json: payload });

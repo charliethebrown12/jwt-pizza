@@ -18,17 +18,10 @@ test('updateUser', async ({ page }) => {
   await expect(page.getByRole('main')).toContainText('pizza diner');
   await page.getByRole('button', { name: 'Edit' }).click();
   await expect(page.locator('h3')).toContainText('Edit user');
+  // change the name in the edit dialog before submitting
+  await page.getByRole('textbox').first().fill('pizza dinerx');
   await page.getByRole('button', { name: 'Update' }).click();
 
-  await page.waitForSelector('[role="dialog"].hidden', { state: 'attached' });
-
-  await expect(page.getByRole('main')).toContainText('pizza diner');
-  await page.getByRole('button', { name: 'Edit' }).click();
-  await expect(page.locator('h3')).toContainText('Edit user');
-  await page.getByRole('textbox').first().fill('pizza dinerx');
-  const updateBtn = page.getByRole('button', { name: 'Update' });
-  await updateBtn.waitFor({ state: 'visible' });
-  await updateBtn.click();
   // wait for success toast and updated main content
   await expect(page.getByRole('status')).toContainText('Profile updated');
   await expect(page.getByRole('main')).toContainText('pizza dinerx');

@@ -57,8 +57,14 @@ export default function AdminDashboard(props: Props) {
   if (!user.id) return;
   const ok = window.confirm(`Delete user ${user.name}?`);
   if (!ok) return;
-  await pizzaService.deleteUser(user.id);
-  setUsersList(await pizzaService.listUsers(userPage, 10, `*${filterUserRef.current?.value || ''}*`));
+  try {
+    await pizzaService.deleteUser(user.id);
+    // optimistic update: remove from current list
+    setUsersList((prev) => ({ users: prev.users.filter((u) => u.id !== user.id), more: prev.more }));
+  } catch (e) {
+    // failed to delete on server - attempt to refresh list from server
+    setUsersList(await pizzaService.listUsers(userPage, 10, `*${filterUserRef.current?.value || ''}*`));
+  }
   }
 
   let response = <NotFound />;

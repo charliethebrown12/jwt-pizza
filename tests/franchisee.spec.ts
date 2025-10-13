@@ -5,7 +5,9 @@ import applyDefaultMocks from './helpers/mockRoutes';
 
 
 const mockFranchisee: User = {
-  id: 'f-123',
+  // The service's getFranchise(user) calls /api/franchise/${user.id}
+  // so the mocked user id must match the franchise id to return data.
+  id: 'fran-abc',
   name: 'Frankie Owner',
   email: 'frankie@jwt.com',
   password: 'a',

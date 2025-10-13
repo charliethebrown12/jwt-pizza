@@ -131,6 +131,6 @@ test('admin can view user list and delete a user', async ({ page }) => {
   page.on('dialog', (dialog) => dialog.accept());
   await deleteButtons.first().click();
 
-  // after delete, we expect list still present (mock returns same list)
-  await expect(page.getByText('Kai Chen')).toBeVisible();
+  // after delete, deleted user should be removed from the list
+  await expect(page.getByText('Kai Chen')).not.toBeVisible();
 });
