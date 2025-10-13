@@ -33,6 +33,11 @@ export default function Menu() {
     if (selectedStore && order.items.length > 0) {
       order.storeId = selectedStore;
       order.franchiseId = storeMap[selectedStore].franchise.id;
+      try {
+        sessionStorage.setItem('jwtp-order', JSON.stringify(order));
+      } catch (e) {
+        // ignore storage errors in test environments
+      }
       navigate('/payment', { state: { order: order } });
     }
   }

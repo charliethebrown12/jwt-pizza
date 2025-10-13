@@ -1,6 +1,7 @@
 import { Page } from "@playwright/test";
 import { User, Role, Franchise } from "../src/service/pizzaService";
 import { test, expect } from "playwright-test-coverage";
+import applyDefaultMocks from './helpers/mockRoutes';
 
 
 const mockFranchisee: User = {
@@ -24,32 +25,7 @@ const mockFranchiseData: Franchise[] = [
 ];
 
 async function franchiseeInit(page: Page) {
-  let loggedInUser: User | undefined;
-  const validUsers: Record<string, User> = { [mockFranchisee.email!]: mockFranchisee };
-
-  // Authorize login for the franchisee
-  await page.route('**/api/auth', async (route) => {
-    const loginReq = route.request().postDataJSON();
-    const user = validUsers[loginReq.email];
-    if (!user || user.password !== loginReq.password) {
-      await route.fulfill({ status: 401, json: { error: 'Unauthorized' } });
-      return;
-    }
-    loggedInUser = user;
-    await route.fulfill({ json: { user: loggedInUser, token: 'franchisee-token' } });
-  });
-
-  await page.route('**/api/user/me', async (route) => {
-    await route.fulfill({ json: loggedInUser });
-  });
-
-  await page.route(/\/api\/franchise(\/.*|\?.*)?$/, async (route) => {
-    if (route.request().method() === 'GET') {
-      await route.fulfill({ json: mockFranchiseData });
-    }
-  });
-
-  await page.goto('/');
+  await applyDefaultMocks(page, { users: [mockFranchisee], franchises: mockFranchiseData });
 }
 
 test('franchisee can view their dashboard with store data', async ({ page }) => {
@@ -110,7 +86,9 @@ test('franchisee sees the marketing page when no franchise exists', async ({ pag
 test('franchisee can open create store form', async ({ page }) => {
   await franchiseeInit(page);
   // login
+  // login - ensure login page loaded first
   await page.getByRole('link', { name: 'Login' }).click();
+  await page.waitForURL(/.*login/);
   await page.getByRole('textbox', { name: 'Email address' }).fill(mockFranchisee.email!);
   await page.getByRole('textbox', { name: 'Password' }).fill(mockFranchisee.password!);
   await page.getByRole('button', { name: 'Login' }).click();
@@ -118,8 +96,8 @@ test('franchisee can open create store form', async ({ page }) => {
   // Navigate to franchise dashboard
   const globalNav = page.getByLabel('Global');
   await Promise.all([
-    page.waitForResponse((resp) => resp.url().includes('/api/franchise') && resp.request().method() === 'GET'),
-    globalNav.getByRole('link', { name: 'Franchise' }).first().click(),
+  page.waitForResponse((resp) => resp.url().includes('/api/franchise') && resp.request().method() === 'GET'),
+  globalNav.getByRole('link', { name: 'Franchise' }).first().click(),
   ]);
 
   // Click Create store

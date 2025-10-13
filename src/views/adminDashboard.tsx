@@ -54,9 +54,11 @@ export default function AdminDashboard(props: Props) {
   }
 
   async function deleteUser(user: User) {
-    if (!user.id) return;
-    await pizzaService.deleteUser(user.id);
-    setUsersList(await pizzaService.listUsers(userPage, 10, `*${filterUserRef.current?.value || ''}*`));
+  if (!user.id) return;
+  const ok = window.confirm(`Delete user ${user.name}?`);
+  if (!ok) return;
+  await pizzaService.deleteUser(user.id);
+  setUsersList(await pizzaService.listUsers(userPage, 10, `*${filterUserRef.current?.value || ''}*`));
   }
 
   let response = <NotFound />;

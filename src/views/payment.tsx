@@ -8,7 +8,8 @@ import { Order, OrderItem } from '../service/pizzaService';
 export default function Payment() {
   const [errMessage, setErrorMessage] = React.useState('');
   const location = useLocation();
-  const order: Order = location.state?.order || { items: [] };
+  const initialOrder: Order = location.state?.order || { items: [] };
+  const [order, setOrder] = React.useState<Order>(initialOrder);
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -19,6 +20,23 @@ export default function Payment() {
         navigate(loginPath, { state: location.state });
       }
     })();
+  }, []);
+
+  // If order is not provided via location.state (e.g. after redirect login), try sessionStorage
+  React.useEffect(() => {
+    if ((!order || !order.items || order.items.length === 0) && typeof sessionStorage !== 'undefined') {
+      try {
+        const raw = sessionStorage.getItem('jwtp-order');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.items && parsed.items.length > 0) {
+            setOrder(parsed);
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
   }, []);
 
   async function processPayment() {

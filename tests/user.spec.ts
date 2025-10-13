@@ -1,9 +1,11 @@
 import { test, expect } from 'playwright-test-coverage';
 import { Page } from '@playwright/test';
 import { User, Role } from '../src/service/pizzaService';
+import applyDefaultMocks from './helpers/mockRoutes';
 
 test('updateUser', async ({ page }) => {
   const email = `user${Math.floor(Math.random() * 10000)}@jwt.com`;
+  await applyDefaultMocks(page, { users: [], menu: [] });
   await page.goto('/');
   await page.getByRole('link', { name: 'Register' }).click();
   await page.getByRole('textbox', { name: 'Full name' }).fill('pizza diner');
@@ -24,10 +26,11 @@ test('updateUser', async ({ page }) => {
   await page.getByRole('button', { name: 'Edit' }).click();
   await expect(page.locator('h3')).toContainText('Edit user');
   await page.getByRole('textbox').first().fill('pizza dinerx');
-  await page.getByRole('button', { name: 'Update' }).click();
-
-  await page.waitForSelector('[role="dialog"].hidden', { state: 'attached' });
-
+  const updateBtn = page.getByRole('button', { name: 'Update' });
+  await updateBtn.waitFor({ state: 'visible' });
+  await updateBtn.click();
+  // wait for success toast and updated main content
+  await expect(page.getByRole('status')).toContainText('Profile updated');
   await expect(page.getByRole('main')).toContainText('pizza dinerx');
   await page.getByRole('link', { name: 'Logout' }).click();
   await page.getByRole('link', { name: 'Login' }).click();
@@ -43,60 +46,7 @@ test('updateUser', async ({ page }) => {
 
 // Helper to mock auth and user update endpoints for UI-driven update tests
 async function setupUpdateRoutes(page: Page, initialUser: User) {
-  let loggedInUser: User | undefined = { ...initialUser };
-
-  // Handle auth (login/logout)
-  await page.route('**/api/auth', async (route) => {
-    const req = route.request();
-    const method = req.method();
-    if (method === 'PUT') {
-      const body = req.postDataJSON();
-      if (loggedInUser && body.email === loggedInUser.email && body.password === loggedInUser.password) {
-        await route.fulfill({ json: { user: loggedInUser, token: 'tok-1' } });
-      } else {
-        await route.fulfill({ status: 401, json: { message: 'Unauthorized' } });
-      }
-      return;
-    }
-
-    if (method === 'POST') {
-      // registration - accept and return created user
-      const body = route.request().postDataJSON();
-      loggedInUser = { ...body, id: `${Math.floor(Math.random() * 10000)}` };
-      await route.fulfill({ json: { user: loggedInUser, token: 'tok-reg' } });
-      return;
-    }
-
-    if (method === 'DELETE') {
-      // logout - do not remove the user record, only clear session in a real server.
-      // Keep `loggedInUser` so tests can re-login with updated credentials.
-      await route.fulfill({ json: {} });
-      return;
-    }
-  });
-
-  // Provide current user
-  await page.route('**/api/user/me', async (route) => {
-    await route.fulfill({ json: loggedInUser });
-  });
-
-  // Accept user updates
-  await page.route(/\/api\/user\/.+$/, async (route) => {
-    if (route.request().method() === 'PUT') {
-      const updated = route.request().postDataJSON();
-      loggedInUser = { ...updated };
-      await route.fulfill({ json: { user: loggedInUser, token: 'tok-updated' } });
-      return;
-    }
-    await route.continue();
-  });
-
-  // Minimal menu to avoid unrelated failures
-  await page.route('**/api/order/menu', async (route) => {
-    await route.fulfill({ json: [] });
-  });
-
-  await page.goto('/');
+  await applyDefaultMocks(page, { users: [initialUser], menu: [] });
 }
 
 test('updateUser works when logged in as Admin role', async ({ page }) => {

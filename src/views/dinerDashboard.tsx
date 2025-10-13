@@ -18,6 +18,8 @@ export default function DinerDashboard(props: Props) {
   const nameRef = React.useRef<HTMLInputElement>(null);
   const emailRef = React.useRef<HTMLInputElement>(null);
   const passwordRef = React.useRef<HTMLInputElement>(null);
+  const [saving, setSaving] = React.useState(false);
+  const [success, setSuccess] = React.useState<string | null>(null);
 
 
   React.useEffect(() => {
@@ -38,29 +40,35 @@ export default function DinerDashboard(props: Props) {
   }
 
 async function updateUser() {
-  let updatedUser: User = {
+  const updatedUser: User = {
     id: user.id,
     name: nameRef.current?.value,
     email: emailRef.current?.value,
     password: passwordRef.current?.value || undefined,
     roles: user.roles,
   };
+  setSaving(true);
+  setSuccess(null);
   try {
     const returned = await pizzaService.updateUser(updatedUser);
     // Use the canonical user returned by the server (may include roles, id, etc.)
     props.setUser(returned || updatedUser);
     // clear password input after successful update
     if (passwordRef.current) passwordRef.current.value = '';
+    setSuccess('Profile updated');
   } catch (e) {
-    // keep behaviour minimal: log and rethrow for higher-level handlers or dev awareness
-    // (could surface UI feedback here)
     // eslint-disable-next-line no-console
     console.error('Failed to update user', e);
+    setSuccess('Failed to update');
     throw e;
+  } finally {
+    setSaving(false);
+    setTimeout(() => {
+      HSOverlay.close(document.getElementById('hs-jwt-modal')!);
+    }, 100);
+    // clear success after a short delay so tests can assert on it
+    setTimeout(() => setSuccess(null), 2500);
   }
-  setTimeout(() => {
-    HSOverlay.close(document.getElementById('hs-jwt-modal')!);
-  }, 100);
 }
 
   return (
@@ -153,13 +161,16 @@ async function updateUser() {
                 </div>
               </div>
               <div className="flex justify-end items-center gap-x-2 py-3 px-4 border-t  bg-slate-200 rounded-b-xl">
-                <button type="button" className="py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none" onClick={updateUser}>
-                  Update
+                <button type="button" className="py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none" onClick={updateUser} disabled={saving}>
+                  {saving ? 'Saving...' : 'Update'}
                 </button>
               </div>
             </div>
           </div>
         </div>
+        {success && (
+          <div role="status" className="fixed bottom-6 end-6 bg-green-600 text-white px-4 py-2 rounded shadow">{success}</div>
+        )}
       </div>
     </View>
   );

@@ -1,6 +1,7 @@
 import { Page } from "@playwright/test";
 import { test, expect } from "playwright-test-coverage";
 import { User, Role, Franchise } from "../src/service/pizzaService";
+import applyDefaultMocks from './helpers/mockRoutes';
 
 const mockAdmin: User = {
   id: 'a-001',
@@ -28,28 +29,7 @@ const mockAllFranchises: Franchise[] = [
 ];
 
 async function adminInit(page: Page) {
-  let loggedInUser: User | undefined;
-  const validUsers: Record<string, User> = { [mockAdmin.email!]: mockAdmin };
-
-  // Authorize login for the admin
-  await page.route('**/api/auth', async (route) => {
-    const loginReq = route.request().postDataJSON();
-    const user = validUsers[loginReq.email];
-    if (!user || user.password !== loginReq.password) {
-      await route.fulfill({ status: 401, json: { error: 'Unauthorized' } });
-      return;
-    }
-    loggedInUser = user;
-    await route.fulfill({ json: { user: loggedInUser, token: 'admin-token' } });
-  });
-
-  await page.route(/\/api\/franchise(\?.*)?$/, async (route) => {
-    if (route.request().method() === 'GET') {
-      await route.fulfill({ json: { franchises: mockAllFranchises } });
-    }
-  });
-
-  await page.goto('/');
+  await applyDefaultMocks(page, { users: [mockAdmin], franchises: { franchises: mockAllFranchises } });
 }
 
 test('admin can view the list of all franchises', async ({ page }) => {
@@ -126,32 +106,7 @@ test('admin can view user list and delete a user', async ({ page }) => {
 
   let loggedInUser: User | undefined = mockAdmin;
 
-  await page.route('**/api/auth', async (route) => {
-    const loginReq = route.request().postDataJSON();
-    if (loginReq.email === mockAdmin.email && loginReq.password === mockAdmin.password) {
-      await route.fulfill({ json: { user: mockAdmin, token: 'admin-token' } });
-    } else {
-      await route.fulfill({ status: 401, json: { error: 'Unauthorized' } });
-    }
-  });
-
-  await page.route('**/api/user*', async (route) => {
-    // list users
-    if (route.request().method() === 'GET') {
-      await route.fulfill({ json: { users: mockUsers, more: false } });
-      return;
-    }
-    await route.continue();
-  });
-
-  await page.route('**/api/user/*', async (route) => {
-    if (route.request().method() === 'DELETE') {
-      // pretend delete succeeded
-      await route.fulfill({ json: {} });
-      return;
-    }
-    await route.continue();
-  });
+  await applyDefaultMocks(page, { users: [mockAdmin], usersList: { users: mockUsers, more: false } });
 
   await page.goto('/');
 
@@ -173,6 +128,7 @@ test('admin can view user list and delete a user', async ({ page }) => {
 
   // delete the first user
   const deleteButtons = page.getByRole('button', { name: 'Delete' });
+  page.on('dialog', (dialog) => dialog.accept());
   await deleteButtons.first().click();
 
   // after delete, we expect list still present (mock returns same list)
