@@ -63,9 +63,9 @@ export default function Menu() {
           <Button title="Checkout" submit disabled={!selectedStore || order.items.length <= 0} className="disabled:bg-neutral-500 disabled:text-neutral-700" onPress={() => {}} />
 
           <div className="m-4 grid gap-x-8 gap-y-4 sm:gird-cols-1 md:grid-cols-2 lg:grid-cols-4 xlg:grid-cols-5">
-            {menu.map((pizza) => (
+            {menu.map((pizza, idx) => (
               <button
-                key={pizza.title}
+                key={pizza.id || `${pizza.title}-${idx}`}
                 type="button"
                 onClick={(e) => {
                   e.preventDefault();

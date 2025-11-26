@@ -10,16 +10,38 @@ import { JWTPayload, Order } from '../service/pizzaService';
 export default function Delivery() {
   const navigate = useNavigate();
   const location = useLocation();
-  const order: Order = location.state?.order || { pizzas: [] };
-  const jwt: string = location.state?.jwt || 'error';
+  const order: Order = location.state?.order || { items: [] };
+  const jwtFromState = location.state && (location.state.jwt || (location.state.order && (location.state.order.jwt || location.state.order.token)));
+  const jwt: string = jwtFromState || '';
   const [jwtPayload, setJwtPayload] = React.useState<JWTPayload>({ message: 'invalid', payload: "{ error: 'invalid JWT' }" });
 
   async function verify() {
+    // Don't call verify endpoint with an empty token
+    if (!jwt || jwt.trim() === '') {
+      // If we're running locally (no backend), simulate a valid payload so devs can test the UI.
+      // Use Vite's dev flag when available to gate simulated behavior
+      // (fallback to window check if import.meta.env isn't available)
+      const isDev = typeof import.meta !== 'undefined' ? (import.meta as any).env?.DEV : typeof window !== 'undefined' && window.location && window.location.hostname && window.location.hostname.includes('localhost');
+      if (isDev) {
+        const simulated = { message: 'valid', payload: { simulated: true, orderId: order?.id || null, note: 'Simulated verify response in dev' } };
+        setJwtPayload(simulated as any);
+        HSOverlay.open(document.getElementById('hs-jwt-modal')!);
+        return;
+      }
+
+      setJwtPayload({ message: 'invalid', payload: JSON.stringify({ error: 'Missing order JWT. Please complete payment to obtain a valid token.' }) });
+      HSOverlay.open(document.getElementById('hs-jwt-modal')!);
+      return;
+    }
+
     try {
       const r = await pizzaService.verifyOrder(jwt);
       setJwtPayload(r);
     } catch (e: any) {
-      setJwtPayload({ ...e, payload: { error: 'invalid JWT. Looks like you have a bad pizza!' } });
+      const payloadObj = { error: 'invalid JWT. Looks like you have a bad pizza!' };
+      // if the error already has a payload string, preserve it
+      const existing = e && e.payload ? e.payload : JSON.stringify(payloadObj);
+      setJwtPayload({ message: (e && e.message) || 'invalid', payload: typeof existing === 'string' ? existing : JSON.stringify(existing) });
     }
     HSOverlay.open(document.getElementById('hs-jwt-modal')!);
   }
