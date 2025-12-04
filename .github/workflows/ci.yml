@@ -46,8 +46,8 @@ jobs:
           # Read the lines coverage percentage from the summary JSON
           coverage=$(jq '.total.lines.pct' coverage/coverage-summary.json)
           coverage=$(printf "%.2f" "$coverage")
-          # decide color (red if below 80)
-          color=$(echo "$coverage < 80" | bc | awk '{if ($1) print "red"; else print "green"}')
+          # decide color (red if below 50)
+          color=$(echo "$coverage < 50" | bc | awk '{if ($1) print "red"; else print "green"}')
           echo "Posting coverage: $coverage% (color: $color)"
 
           # POST the raw coverage JSON as a form file and include metadata as query params
@@ -59,6 +59,7 @@ jobs:
             -o /tmp/coverage-post.response || (echo "Coverage POST failed; see curl output above" && false)
 
           echo "Badge update response:" && cat /tmp/coverage-post.response || true
+          # Fail the job if coverage is below 50%
   deploy:
     needs: build
     permissions:

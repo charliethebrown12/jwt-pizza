@@ -42,7 +42,21 @@ export default function Payment() {
   async function processPayment() {
     try {
       const confirmation = await pizzaService.order(order);
-      navigate('/delivery', { state: { order: confirmation.order, jwt: confirmation.jwt } });
+      // If backend returned an error payload (frontend-only dev mode), don't navigate
+      if (!confirmation || !confirmation.order) {
+        const anyConfErr: any = confirmation || {};
+        const msg = anyConfErr.message || anyConfErr.error || 'Invalid order response from server';
+        setErrorMessage(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        return;
+      }
+      // confirmation may return the token under different property names depending on backend
+      const anyConf: any = confirmation || {};
+      // Prefer non-empty token values; try a few likely places
+      const candidateJwt =
+        anyConf.jwt || anyConf.token || anyConf.jwtToken || (anyConf.order && (anyConf.order.jwt || anyConf.order.token));
+      const returnedJwt = typeof candidateJwt === 'string' && candidateJwt.trim() !== '' ? candidateJwt : undefined;
+      // Always forward the order object; only include jwt if non-empty
+      navigate('/delivery', { state: { order: confirmation.order, ...(returnedJwt ? { jwt: returnedJwt } : {}) } });
     } catch (err: any) {
       setErrorMessage(err.message);
     }
